@@ -1,0 +1,23 @@
+# Expert predictions for the upcoming/current match.
+# Edit this file in GitHub, commit, and Streamlit Cloud will auto-redeploy in ~30 seconds.
+#
+# Add or remove experts by adding/deleting [[experts]] blocks.
+# All three numbers are runs scored in that phase of one innings.
+
+[[experts]]
+name = "Harsha Bhogle"
+powerplay = 58
+middle = 72
+death = 68
+
+[[experts]]
+name = "Sunil Gavaskar"
+powerplay = 52
+middle = 70
+death = 65
+
+[[experts]]
+name = "Ravi Shastri"
+powerplay = 61
+middle = 75
+death = 70
