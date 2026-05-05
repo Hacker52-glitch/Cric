@@ -1,0 +1,7 @@
+# Copy this file to secrets.toml and fill in your real key.
+# (secrets.toml is in .gitignore so it won't be committed.)
+#
+# Get a free CricAPI key at: https://cricketdata.org/signup.aspx
+# Free tier allows ~100 requests/day.
+
+CRIC_API_KEY = "your-cricapi-key-here"
