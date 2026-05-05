@@ -8,7 +8,7 @@ allows ~100 requests/day, which is plenty for a personal dashboard.
 import requests
 
 BASE_URL = "https://api.cricapi.com/v1"
-TIMEOUT = 10
+TIMEOUT = 30
 
 
 def _get(path, api_key, **params):
