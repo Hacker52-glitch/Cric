@@ -2,12 +2,13 @@
 IPL Phase Score Predictor — Streamlit app
 
 Combines:
-  - Historical predictions (from Cricsheet, last 7 matches)
-  - Live IPL match scores (from CricAPI / cricketdata.org)
-
-Deploy: push this repo to GitHub, then go to share.streamlit.io and
-connect the repo. Add your CricAPI key in the Secrets settings.
+  - Algorithmic prediction (Cricsheet, last 7 matches average)
+  - Manual expert predictions (predictions.toml)
+  - Live IPL match scores (CricAPI / cricketdata.org)
 """
+
+import tomllib
+from pathlib import Path
 
 import altair as alt
 import pandas as pd
@@ -72,6 +73,58 @@ st.markdown(
         letter-spacing: 0.12em;
         color: #76705f;
     }
+
+    /* Expert comparison table */
+    .expert-wrap { margin: 8px 0 24px; }
+    .expert-table { width: 100%; border-collapse: collapse; }
+    .expert-table th {
+        text-align: right;
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 500;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #76705f;
+        padding: 14px 18px;
+        border-bottom: 1px solid #d8cfb9;
+    }
+    .expert-table th:first-child { text-align: left; }
+    .expert-table th .th-sub {
+        display: block;
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+        color: #b9af96;
+        font-size: 10px;
+        margin-top: 3px;
+    }
+    .expert-table td {
+        padding: 18px;
+        border-bottom: 1px solid #e8dcc0;
+    }
+    .expert-table tr:last-child td { border-bottom: none; }
+    .expert-table .name-main {
+        font-family: 'Fraunces', serif;
+        font-size: 17px;
+        color: #1a1d17;
+    }
+    .expert-table .name-sub {
+        font-size: 11px;
+        color: #76705f;
+        margin-top: 2px;
+    }
+    .expert-table .num {
+        text-align: right;
+        font-family: 'Fraunces', serif;
+        font-size: 26px;
+        font-weight: 400;
+        color: #1a1d17;
+        width: 110px;
+        letter-spacing: -0.01em;
+    }
+    .expert-table .algo-row { background: rgba(31, 68, 34, 0.05); }
+    .expert-table .algo-row .num { color: #1f4422; }
+    .expert-table .algo-row .name-main { font-weight: 500; color: #1f4422; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -93,6 +146,21 @@ def get_predictions():
 @st.cache_data(ttl=60, show_spinner=False)
 def get_live_matches(api_key):
     return live_api.current_matches(api_key)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_experts():
+    """Load manual expert predictions from predictions.toml."""
+    path = Path("predictions.toml")
+    if not path.exists():
+        return []
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("experts", [])
+    except Exception as e:
+        st.warning(f"Could not parse predictions.toml: {e}")
+        return []
 
 
 # ---------- Helpers ----------
@@ -123,7 +191,7 @@ def render_live_match(m):
     score_lines = []
     for s in m.get("score") or []:
         inning = s.get("inning", "")
-        score_lines.append(f"{inning}: **{s.get('r', 0)}/{s.get('w', 0)}** ({s.get('o', 0)} ov)")
+        score_lines.append(f"{inning}: <b>{s.get('r', 0)}/{s.get('w', 0)}</b> ({s.get('o', 0)} ov)")
 
     body = (
         f"<div class='live-card'>"
@@ -134,6 +202,50 @@ def render_live_match(m):
         + f"</div>"
     )
     st.markdown(body, unsafe_allow_html=True)
+
+
+def render_comparison_table(algo_phases, experts):
+    """Algorithm + experts side by side."""
+    rows = [{
+        "name": "Algorithm",
+        "subtitle": "avg of last 7 IPL matches",
+        "is_algo": True,
+        "powerplay": algo_phases["powerplay"]["predicted"],
+        "middle": algo_phases["middle"]["predicted"],
+        "death": algo_phases["death"]["predicted"],
+    }]
+    for e in experts:
+        rows.append({
+            "name": e.get("name", "Expert"),
+            "subtitle": "expert call",
+            "is_algo": False,
+            "powerplay": e.get("powerplay", "—"),
+            "middle": e.get("middle", "—"),
+            "death": e.get("death", "—"),
+        })
+
+    html = [
+        "<div class='expert-wrap'><table class='expert-table'>",
+        "<thead><tr>",
+        "<th>Predictor</th>",
+        "<th>Powerplay<span class='th-sub'>overs 1\u20136</span></th>",
+        "<th>Middle<span class='th-sub'>overs 7\u201315</span></th>",
+        "<th>Death<span class='th-sub'>overs 16\u201320</span></th>",
+        "</tr></thead><tbody>",
+    ]
+    for r in rows:
+        cls = " class='algo-row'" if r["is_algo"] else ""
+        html.append(
+            f"<tr{cls}>"
+            f"<td><div class='name-main'>{r['name']}</div>"
+            f"<div class='name-sub'>{r['subtitle']}</div></td>"
+            f"<td class='num'>{r['powerplay']}</td>"
+            f"<td class='num'>{r['middle']}</td>"
+            f"<td class='num'>{r['death']}</td>"
+            f"</tr>"
+        )
+    html.append("</tbody></table></div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
 
 
 def matches_to_df(payload, phase_key):
@@ -157,14 +269,15 @@ def main():
     setup_data()
 
     st.title("🏏 IPL Phase Score Predictor")
-    st.caption("Predicting runs in any over range from the last 7 matches in the tournament.")
+    st.caption("Algorithm vs experts — predicting runs in any over range from the last 7 matches in the tournament.")
 
     # Sidebar
     with st.sidebar:
         st.markdown("### About")
         st.markdown(
             "A simple cricket score predictor: takes the average of the last "
-            "7 IPL matches' scores in any over range, and uses that as today's prediction."
+            "7 IPL matches' scores in any over range. Compared head-to-head "
+            "with predictions entered by 3 cricket experts."
         )
         st.markdown("### Refresh")
         if st.button("Re-fetch all data", use_container_width=True):
@@ -174,17 +287,14 @@ def main():
         st.markdown("### Data sources")
         st.markdown(
             "- Historical: [cricsheet.org](https://cricsheet.org)\n"
-            "- Live scores: [cricketdata.org](https://cricketdata.org)"
+            "- Live scores: [cricketdata.org](https://cricketdata.org)\n"
+            "- Expert calls: `predictions.toml` in repo"
         )
         st.markdown("### API key")
         if "CRIC_API_KEY" in st.secrets:
             st.success("CricAPI key configured ✓")
         else:
             st.warning("No CricAPI key — live matches disabled")
-            st.caption(
-                "Get a free key at cricketdata.org and add it to Streamlit "
-                "secrets as `CRIC_API_KEY`."
-            )
 
     # ---------- Live matches ----------
     st.divider()
@@ -229,10 +339,27 @@ def main():
                 value=f"{p['predicted']}",
             )
     st.caption(
-        f"Average runs across {len(payload['matches']) * 2} innings "
+        f"Algorithmic prediction. Average across {len(payload['matches']) * 2} innings "
         f"from the {len(payload['matches'])} most recent matches "
         f"(as of {payload.get('as_of', 'today')})."
     )
+
+    # ---------- Algorithm vs experts ----------
+    experts = load_experts()
+    if experts:
+        st.divider()
+        st.subheader("Algorithm vs experts")
+        st.caption(
+            f"Comparison of the algorithm's prediction with manual calls from "
+            f"{len(experts)} cricket experts. Edit `predictions.toml` in the repo to update."
+        )
+        render_comparison_table(phases, experts)
+    else:
+        st.divider()
+        st.info(
+            "To compare against expert predictions, add a `predictions.toml` "
+            "file at the root of the repo. See README for the format."
+        )
 
     # ---------- Last 7 detail ----------
     st.divider()
@@ -279,8 +406,7 @@ def main():
     # Footer
     st.divider()
     st.caption(
-        "🏏 Built with Streamlit. Data: cricsheet.org (historical) + cricketdata.org (live). "
-        "Predictions are simple averages — see README for upgrade paths."
+        "🏏 Built with Streamlit. Data: cricsheet.org (historical) + cricketdata.org (live) + predictions.toml (experts)."
     )
 
 
