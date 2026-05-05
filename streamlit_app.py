@@ -3,12 +3,9 @@ IPL Phase Score Predictor — Streamlit app
 
 Combines:
   - Algorithmic prediction (Cricsheet, last 7 matches average)
-  - Manual expert predictions (predictions.toml)
+  - Manual expert predictions (Streamlit secrets, private)
   - Live IPL match scores (CricAPI / cricketdata.org)
 """
-
-import tomllib
-from pathlib import Path
 
 import altair as alt
 import pandas as pd
@@ -150,16 +147,10 @@ def get_live_matches(api_key):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_experts():
-    """Load manual expert predictions from predictions.toml."""
-    path = Path("predictions.toml")
-    if not path.exists():
-        return []
+    """Load expert predictions from private Streamlit secrets."""
     try:
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-        return data.get("experts", [])
-    except Exception as e:
-        st.warning(f"Could not parse predictions.toml: {e}")
+        return [dict(e) for e in st.secrets.get("experts", [])]
+    except Exception:
         return []
 
 
@@ -288,7 +279,7 @@ def main():
         st.markdown(
             "- Historical: [cricsheet.org](https://cricsheet.org)\n"
             "- Live scores: [cricketdata.org](https://cricketdata.org)\n"
-            "- Expert calls: `predictions.toml` in repo"
+            "- Expert calls: private (Streamlit secrets)"
         )
         st.markdown("### API key")
         if "CRIC_API_KEY" in st.secrets:
@@ -351,14 +342,14 @@ def main():
         st.subheader("Algorithm vs experts")
         st.caption(
             f"Comparison of the algorithm's prediction with manual calls from "
-            f"{len(experts)} cricket experts. Edit `predictions.toml` in the repo to update."
+            f"{len(experts)} cricket experts."
         )
         render_comparison_table(phases, experts)
     else:
         st.divider()
         st.info(
-            "To compare against expert predictions, add a `predictions.toml` "
-            "file at the root of the repo. See README for the format."
+            "To compare against expert predictions, add an `[[experts]]` "
+            "section to your Streamlit secrets. See README for the format."
         )
 
     # ---------- Last 7 detail ----------
